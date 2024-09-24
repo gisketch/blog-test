@@ -9,16 +9,16 @@ jobs:
   post-to-discord:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 2
 
       - name: Get changed files
         id: changed-files
-        uses: tj-actions/changed-files@v23
+        uses: tj-actions/changed-files@v35
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
@@ -36,7 +36,7 @@ jobs:
           import asyncio
           import os
 
-          client = discord.Client()
+          client = discord.Client(intents=discord.Intents.default())
 
           @client.event
           async def on_ready():
