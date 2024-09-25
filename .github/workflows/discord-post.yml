@@ -3,7 +3,10 @@ name: Post to Discord
 on:
   push:
     paths:
-      - 'posts/**'
+      - "posts/**"
+      - "test-posts/**"
+      - "changelog/**"
+      - "test-changelog/**"
 
 jobs:
   post-to-discord:
@@ -20,7 +23,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
       - name: Install dependencies
         run: |
@@ -30,27 +33,64 @@ jobs:
       - name: Post to Discord
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+          ANNOUNCEMENT_ID: ${{ secrets.ANNOUNCEMENT_ID }}
+          CHANGELOG_ID: ${{ secrets.CHANGELOG_ID }}
+          TEST_ANNOUNCEMENT_ID: ${{ secrets.TEST_ANNOUNCEMENT_ID }}
+          TEST_CHANGELOG_ID: ${{ secrets.TEST_CHANGELOG_ID }}
         run: |
           import discord
           import asyncio
           import os
+          import sys
 
           client = discord.Client(intents=discord.Intents.default())
 
           @client.event
           async def on_ready():
-              channel = client.get_channel(int(os.environ['DISCORD_CHANNEL_ID']))
               changed_files = '${{ steps.changed-files.outputs.all_changed_files }}'.split()
               
               for file in changed_files:
+                  content = ""
+                  channel_id = None
+                  mention = ""
+
                   if file.startswith('posts/') and file.endswith('.md'):
+                      channel_id = int(os.environ['ANNOUNCEMENT_ID'])
+                      mention = "@everyone"
+                  elif file.startswith('test-posts/') and file.endswith('.md'):
+                      channel_id = int(os.environ['TEST_ANNOUNCEMENT_ID'])
+                      mention = "@gisketch"
+                  elif file.startswith('changelog/') and file.endswith('.md'):
+                      channel_id = int(os.environ['CHANGELOG_ID'])
+                  elif file.startswith('test-changelog/') and file.endswith('.md'):
+                      channel_id = int(os.environ['TEST_CHANGELOG_ID'])
+
+                  if channel_id:
                       with open(file, 'r') as f:
                           content = f.read()
-                      message = f"@everyone\n\n{content}"
-                      await channel.send(message)
+                      
+                      channel = client.get_channel(channel_id)
+                      if channel is None:
+                          print(f"Error: Could not find channel with ID {channel_id}")
+                          continue
+
+                      message = f"{mention}\n\n{content}" if mention else content
+                      try:
+                          await channel.send(message)
+                          print(f"Successfully sent message to channel {channel.name} ({channel_id})")
+                      except discord.errors.Forbidden:
+                          print(f"Error: Bot doesn't have permission to send messages in channel {channel.name} ({channel_id})")
+                      except Exception as e:
+                          print(f"Error sending message to channel {channel_id}: {str(e)}")
               
               await client.close()
 
-          client.run(os.environ['DISCORD_BOT_TOKEN'])
+          try:
+              client.run(os.environ['DISCORD_BOT_TOKEN'])
+          except discord.errors.LoginFailure:
+              print("Error: Invalid Discord bot token")
+              sys.exit(1)
+          except Exception as e:
+              print(f"Error running Discord bot: {str(e)}")
+              sys.exit(1)
         shell: python
